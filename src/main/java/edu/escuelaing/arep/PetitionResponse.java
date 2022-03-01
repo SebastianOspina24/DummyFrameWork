@@ -1,4 +1,4 @@
-package edu.escuelaing.arep.returns;
+package edu.escuelaing.arep;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -12,8 +12,8 @@ public class PetitionResponse {
         if (entrada.contains("GET")) {
             url = entrada.split(" ")[1].substring(1);
             try {
-                ResponseType.getInstance().recursoToString(url, clienteSocket);
-            } catch (IOException e) {
+                ResponseType.getInstance().getRecurso(url, clienteSocket);
+            } catch (Exception e) {
                 try {
                     ResponseType.getInstance().recursoToString("/resource/img/404.jpg", clienteSocket);
                 } catch (IOException e1) {

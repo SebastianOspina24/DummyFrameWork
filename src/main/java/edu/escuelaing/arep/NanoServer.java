@@ -1,9 +1,6 @@
 package edu.escuelaing.arep;
 
 import java.net.*;
-
-import edu.escuelaing.arep.returns.PetitionResponse;
-
 import java.io.*;
 
 public class NanoServer {

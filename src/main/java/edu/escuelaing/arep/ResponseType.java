@@ -1,21 +1,21 @@
-package edu.escuelaing.arep.returns;
+package edu.escuelaing.arep;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.Socket;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import edu.escuelaing.arep.NanoServerException;
-import edu.escuelaing.arep.annotation.Componente;
-import edu.escuelaing.arep.annotation.GetMapping;
 
 public class ResponseType {
 
     private static ResponseType instance = new ResponseType();
-    private HashMap<String, Method> services = new HashMap<String, Method>();
+    private HashMap<String, Method> method = new HashMap<String, Method>();
 
     private ResponseType() {
         mapping(findComponents());
@@ -25,6 +25,14 @@ public class ResponseType {
         if (instance == null)
             instance = new ResponseType();
         return instance;
+    }
+
+    public void getRecurso(String url, Socket clienteSocket)throws IOException, IllegalArgumentException, URISyntaxException{
+        if(url.contains(".")){
+            recursoToString(url, clienteSocket);
+        }else{
+            mapp( url,  clienteSocket);
+        }
     }
 
     /**
@@ -43,7 +51,6 @@ public class ResponseType {
                 clienteSocket.getOutputStream(), true);
         switch (type) {
             case TXT:
-                System.out.println(url);
                 String pagina = "HTTP/1.1";
                 BufferedReader br;
                 try {
@@ -53,7 +60,6 @@ public class ResponseType {
                     pagina += toString(br);
                 } catch (Exception e) {
                     pagina += "404 Not Found \r\n\r\n";
-                    ;
                 }
                 out = new PrintWriter(clienteSocket.getOutputStream(), true);
                 out.println(pagina);
@@ -152,6 +158,23 @@ public class ResponseType {
         return temp[temp.length - 1];
     }
 
+    private void mapp(String url, Socket clienteSocket) throws IOException, IllegalArgumentException, URISyntaxException{
+        String res = "HTTP/1.1 200 OK\r\n Content-Type: text/html \r\n\r\n";
+        Method m = method.get("/"+url);
+        if(m == null){
+            res ="HTTP/1.1 404 Not Found \r\n\r\n";
+        }
+        try {
+            res += m.invoke(null,"");
+        } catch (IllegalAccessException |InvocationTargetException e) {
+            Logger.getLogger(ResponseType.class.getName()).log(Level.SEVERE, "Component not found", e);
+        }
+        PrintWriter out = new PrintWriter(
+                clienteSocket.getOutputStream(), true);
+        out.println(res);
+        out.close();        
+    }
+
     /**
      * Determina la extension del archivo para posteriormente tratarlo y poder dar
      * una respuesta adecuada
@@ -179,7 +202,7 @@ public class ResponseType {
                 for (Method m : c.getDeclaredMethods()) {
                     if (m.isAnnotationPresent(GetMapping.class)) {
                         String uri = m.getAnnotation(GetMapping.class).value();
-                        services.put(uri, m);
+                        method.put(uri, m);
                     }
                 }
             } catch (ClassNotFoundException e) {
