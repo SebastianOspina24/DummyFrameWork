@@ -1,15 +1,24 @@
 package edu.escuelaing.arep.returns;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.Socket;
-
+import java.nio.file.*;
+import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import edu.escuelaing.arep.NanoServerException;
+import edu.escuelaing.arep.annotation.Componente;
+import edu.escuelaing.arep.annotation.GetMapping;
 
 public class ResponseType {
 
-    private static ResponseType instance = null;
+    private static ResponseType instance = new ResponseType();
+    private HashMap<String, Method> services = new HashMap<String, Method>();
 
     private ResponseType() {
+        mapping(findComponents());
     }
 
     public static ResponseType getInstance() {
@@ -19,8 +28,10 @@ public class ResponseType {
     }
 
     /**
-     * Va a buscar el recurso pedido y devuvelve lo que encuentre sea texto o una imagen
-     * @param url ubicacion del archivo solicitado
+     * Va a buscar el recurso pedido y devuvelve lo que encuentre sea texto o una
+     * imagen
+     * 
+     * @param url          ubicacion del archivo solicitado
      * @param clientSocket Socket de respuesta al cliente que lo solicita
      * @throws IOException en caso de errores
      */
@@ -29,10 +40,10 @@ public class ResponseType {
         String devo = getExtension(url);
         Tipo type = getType(url);
         PrintWriter out = new PrintWriter(
-            clienteSocket.getOutputStream(), true);
+                clienteSocket.getOutputStream(), true);
         switch (type) {
             case TXT:
-            System.out.println(url);
+                System.out.println(url);
                 String pagina = "HTTP/1.1";
                 BufferedReader br;
                 try {
@@ -50,18 +61,18 @@ public class ResponseType {
                 break;
 
             case BIN:
-            DataOutputStream binaryOut = new DataOutputStream(clienteSocket.getOutputStream());
-            try {
-                byte[] bytes = toBytes(url);
-                binaryOut.writeBytes("HTTP/1.1 200 OK \r\n");
-                binaryOut.writeBytes("Content-Type: image/" + devo + "\r\n");
-                binaryOut.writeBytes("Content-Length: " + bytes.length+"\r\n\r\n");
-                binaryOut.write(bytes,0,(int)new File(url).length());
-            } catch (Exception e) {
-                binaryOut.writeBytes("HTTP/1.1 404 Not Found\r\n\r\n");
-            }
-            binaryOut.close();
-            break;
+                DataOutputStream binaryOut = new DataOutputStream(clienteSocket.getOutputStream());
+                try {
+                    byte[] bytes = toBytes(url);
+                    binaryOut.writeBytes("HTTP/1.1 200 OK \r\n");
+                    binaryOut.writeBytes("Content-Type: image/" + devo + "\r\n");
+                    binaryOut.writeBytes("Content-Length: " + bytes.length + "\r\n\r\n");
+                    binaryOut.write(bytes, 0, (int) new File(url).length());
+                } catch (Exception e) {
+                    binaryOut.writeBytes("HTTP/1.1 404 Not Found\r\n\r\n");
+                }
+                binaryOut.close();
+                break;
 
             case NOSOPORTADO:
                 out = new PrintWriter(clienteSocket.getOutputStream(), true);
@@ -71,16 +82,19 @@ public class ResponseType {
         }
 
     }
+
     /**
-     * va a obtener la imagen en la ruta dada y obtiene el arreglo de bytes que la componen
-     * @param url ubicacion de la imagen    
+     * va a obtener la imagen en la ruta dada y obtiene el arreglo de bytes que la
+     * componen
+     * 
+     * @param url ubicacion de la imagen
      * @return Devuelve un arreglo de bytes de la imagen
      * @throws NanoServerException en caso de no encontrar la imagen
      */
 
     private byte[] toBytes(String url) throws NanoServerException {
         try {
-            File graphicResource= new File(url);
+            File graphicResource = new File(url);
             FileInputStream inputImage = new FileInputStream(graphicResource);
             byte[] bytes = new byte[(int) graphicResource.length()];
             inputImage.read(bytes);
@@ -149,13 +163,52 @@ public class ResponseType {
         Tipo a = null;
         if (url.contains(".css") || url.contains(".js") || url.contains(".html")) {
             a = Tipo.TXT;
-        } else if (url.contains(".jpg") || url.contains(".png")|| url.contains(".ico")) {
+        } else if (url.contains(".jpg") || url.contains(".png") || url.contains(".ico")) {
             a = Tipo.BIN;
         } else {
             a = Tipo.NOSOPORTADO;
         }
         return a;
     }
+
+    private void mapping(List<String> componentsList) {
+        for (String component : componentsList) {
+            Class<?> c = null;
+            try {
+                c = Class.forName(component);
+                for (Method m : c.getDeclaredMethods()) {
+                    if (m.isAnnotationPresent(GetMapping.class)) {
+                        String uri = m.getAnnotation(GetMapping.class).value();
+                        services.put(uri, m);
+                    }
+                }
+            } catch (ClassNotFoundException e) {
+                Logger.getLogger(ResponseType.class.getName()).log(Level.SEVERE, "Component not found", e);
+            }
+        }
+    }
+
+    public static List<String> findComponents() {
+        List<String> javaFiles = new ArrayList<String>();
+        List<String> components = new ArrayList<String>();
+        String path = "./src/main/java/edu/escuelaing/arep";
+        try {
+            javaFiles = Files.walk(Paths.get(path)).map(Path::getFileName).map(Path::toString)
+                    .filter(n -> n.endsWith(".java")).collect(Collectors.toList());
+
+            for (String name : javaFiles) {
+                Class<?> cls = Class.forName("edu.escuelaing.arep." + name.substring(0, name.length() - 5));
+                if (cls.isAnnotationPresent(Componente.class)) {
+                    components.add("edu.escuelaing.arep." + name.substring(0, name.length() - 5));
+                }
+            }
+        } catch (Exception e) {
+            Logger.getLogger(ResponseType.class.getName()).log(Level.SEVERE, e.getMessage(), e);
+        }
+
+        return components;
+    }
+
 }
 
 /**
